@@ -41,7 +41,19 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS leaderboard (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_name TEXT,
-    savings_score INTEGER
+    savings_score REAL,
+    predicted_spending REAL
+  );
+`);
+
+// Reset leaderboard for schema change
+db.exec('DROP TABLE IF EXISTS leaderboard');
+db.exec(`
+  CREATE TABLE leaderboard (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_name TEXT,
+    savings_score REAL,
+    predicted_spending REAL
   );
 `);
 
@@ -61,6 +73,16 @@ if (circleCount.count === 0) {
   db.prepare("INSERT INTO social_circles (name, goal_amount, current_savings) VALUES (?, ?, ?)").run(
     "Grad Trip Fund", 5000.00, 1250.00
   );
+}
+
+// Ensure leaderboard has data
+const leaderCount = db.prepare("SELECT COUNT(*) as count FROM leaderboard").get() as { count: number };
+if (leaderCount.count === 0) {
+  const insert = db.prepare("INSERT INTO leaderboard (user_name, savings_score, predicted_spending) VALUES (?, ?, ?)");
+  insert.run("Alex Chen", 1250.00, 2400.00);
+  insert.run("Sarah J.", 980.00, 3100.00);
+  insert.run("You", 850.00, 2100.00);
+  insert.run("Marcus T.", 420.00, 4500.00);
 }
 
 async function startServer() {
@@ -107,7 +129,7 @@ async function startServer() {
         },
         body: JSON.stringify({
           text,
-          model_id: "eleven_monolingual_v1",
+          model_id: "eleven_multilingual_v2",
           voice_settings: {
             stability: 0.5,
             similarity_boost: 0.5,
@@ -116,7 +138,9 @@ async function startServer() {
       });
 
       if (!response.ok) {
-        throw new Error("ElevenLabs API error");
+        const errorText = await response.text();
+        console.error("ElevenLabs API full error:", errorText);
+        throw new Error(`ElevenLabs API error: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const audioBuffer = await response.arrayBuffer();
