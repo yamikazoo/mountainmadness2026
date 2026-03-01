@@ -11,4 +11,5 @@ coverage/
 .env
 .env.local
 node_modules
-dist
+distfinsync.db
+.next

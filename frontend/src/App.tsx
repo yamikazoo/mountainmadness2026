@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Calendar, 
-  Upload, 
-  Users, 
-  TrendingUp, 
-  Play, 
-  Plus, 
-  FileText, 
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
+import {
+  Calendar,
+  Upload,
+  Users,
+  TrendingUp,
+  Play,
+  Plus,
+  FileText,
   ChevronRight,
   Wallet,
   ArrowUpRight,
@@ -15,22 +16,9 @@ import {
   Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { predictEventCosts, parseFinancialDocument, generateBriefingText } from './services/geminiService';
+import { predictEventCosts, parseFinancialDocument, generateBriefingText, FinancialEvent } from '../services/geminiService';
+
 // --- Components ---
-type AppEvent = {
-  id: number;
-  google_event_id?: string | null;
-  title: string;
-  description?: string | null;
-  location?: string | null;
-  start_time: string;
-  end_time?: string | null;
-  estimated_cost: number;
-  category: string;
-  source: 'calendar' | 'document';
-  created_at?: string;
-  updated_at?: string;
-};
 
 const Card = ({ children, className = "" }: { children: React.ReactNode, className?: string, key?: React.Key }) => (
   <div className={`bg-white rounded-3xl p-6 shadow-sm border border-black/5 ${className}`}>
@@ -54,7 +42,7 @@ const Stat = ({ label, value, icon: Icon, color }: { label: string, value: strin
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'calendar' | 'docs' | 'social'>('calendar');
-  const [events, setEvents] = useState<AppEvent[]>([]);
+  const [events, setEvents] = useState<FinancialEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [isBriefing, setIsBriefing] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -69,13 +57,7 @@ export default function App() {
   const fetchEvents = async () => {
     const res = await fetch('/api/events');
     const data = await res.json();
-  
-    const normalizedEvents: AppEvent[] = (data || []).map((event: any) => ({
-      ...event,
-      estimated_cost: Number(event.estimated_cost ?? 0),
-    }));
-  
-    setEvents(normalizedEvents);
+    setEvents(data);
   };
 
   const fetchSocial = async () => {
@@ -94,7 +76,7 @@ export default function App() {
       reader.onload = async () => {
         const base64 = (reader.result as string).split(',')[1];
         const parsedEvents = await parseFinancialDocument(base64, file.type);
-        
+
         // Save to DB
         for (const event of parsedEvents) {
           await fetch('/api/events', {
@@ -123,7 +105,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text })
       });
-      
+
       if (res.ok) {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
@@ -143,6 +125,16 @@ export default function App() {
 
   const totalUpcoming = events.reduce((sum, e) => sum + e.estimated_cost, 0);
 
+  const categoryData = useMemo(() => {
+    const categories: Record<string, number> = {};
+    events.forEach(e => {
+      categories[e.category] = (categories[e.category] || 0) + e.estimated_cost;
+    });
+    return Object.entries(categories).map(([name, value]) => ({ name, value }));
+  }, [events]);
+
+  const COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6'];
+
   return (
     <div className="min-h-screen max-w-md mx-auto bg-[#F9F9F7] pb-24 relative overflow-hidden">
       {/* Header */}
@@ -151,12 +143,13 @@ export default function App() {
           <h1 className="text-4xl font-serif italic font-bold tracking-tight">FinSync</h1>
           <p className="text-black/40 font-medium text-sm mt-1">Temporal Wealth Agent</p>
         </div>
-        <button 
+        <button
           onClick={handleBriefing}
           disabled={isBriefing}
-          className={`p-4 rounded-full shadow-lg transition-all active:scale-95 ${isBriefing ? 'bg-emerald-500 animate-pulse' : 'bg-black'}`}
+          className={`flex items-center gap-2 px-4 py-3 rounded-2xl shadow-lg transition-all active:scale-95 ${isBriefing ? 'bg-emerald-500 animate-pulse' : 'bg-black text-white hover:bg-black/90'}`}
         >
-          {isBriefing ? <Volume2 className="text-white" /> : <Play className="text-white fill-white" size={20} />}
+          {isBriefing ? <Volume2 className="text-white" size={18} /> : <Play className="text-white fill-white" size={18} />}
+          <span className="text-sm font-bold tracking-wide">{isBriefing ? "Playing..." : "Daily Report"}</span>
         </button>
       </header>
 
@@ -164,18 +157,52 @@ export default function App() {
       <main className="px-6 space-y-6">
         {/* Quick Stats */}
         <div className="grid grid-cols-1 gap-4">
-          <Card className="bg-black text-white border-none">
+          <Card className="bg-white text-black border-black/10">
             <div className="flex justify-between items-start mb-4">
-              <div className="p-2 bg-white/10 rounded-xl">
-                <Wallet size={20} className="text-white" />
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-black/5 rounded-xl">
+                  <Wallet size={18} className="text-black" />
+                </div>
+                <h3 className="font-bold text-sm tracking-widest uppercase text-black/80">Quick Stats</h3>
               </div>
-              <span className="text-xs font-bold px-2 py-1 bg-emerald-500 rounded-lg">ON TRACK</span>
+              <span className="text-xs font-bold px-2 py-1 bg-emerald-100 text-emerald-700 rounded-lg mt-1">ON TRACK</span>
             </div>
-            <p className="text-white/60 text-xs font-medium uppercase tracking-widest">Upcoming Outflow (30d)</p>
-            <h2 className="text-4xl font-bold mt-1">${totalUpcoming.toLocaleString()}</h2>
-            <div className="mt-4 flex items-center gap-2 text-emerald-400 text-xs font-bold">
-              <ArrowUpRight size={14} />
-              <span>Predicted from {events.length} events</span>
+
+            <div className="relative z-10 w-full flex flex-col sm:flex-row justify-between items-start sm:items-center">
+              <div>
+                <p className="text-black/60 text-xs font-medium uppercase tracking-widest">Upcoming Outflow (30d)</p>
+                <h2 className="text-4xl font-bold mt-1">${totalUpcoming.toLocaleString()}</h2>
+                <div className="mt-4 flex items-center gap-2 text-emerald-600 text-xs font-bold">
+                  <ArrowUpRight size={14} />
+                  <span>Predicted from {events.length} events</span>
+                </div>
+              </div>
+
+              {events.length > 0 && (
+                <div className="h-32 w-32 mt-6 sm:mt-0 sm:ml-6 flex-shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={categoryData}
+                        innerRadius={36}
+                        outerRadius={48}
+                        paddingAngle={5}
+                        dataKey="value"
+                        stroke="none"
+                      >
+                        {categoryData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip
+                        contentStyle={{ backgroundColor: '#1A1A1A', border: '1px solid #333', borderRadius: '12px', color: '#fff', fontSize: '10px', padding: '4px 8px' }}
+                        itemStyle={{ color: '#fff', fontWeight: 'bold' }}
+                        formatter={(value: number) => `$${value.toLocaleString()}`}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </div>
           </Card>
         </div>
@@ -186,9 +213,8 @@ export default function App() {
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest rounded-xl transition-all ${
-                activeTab === tab ? 'bg-white shadow-sm text-black' : 'text-black/40'
-              }`}
+              className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest rounded-xl transition-all ${activeTab === tab ? 'bg-white shadow-sm text-black' : 'text-black/40'
+                }`}
             >
               {tab}
             </button>
@@ -214,19 +240,18 @@ export default function App() {
               {events.map((event, idx) => (
                 <Card key={idx} className="flex items-center justify-between group hover:border-black/20 transition-colors">
                   <div className="flex items-center gap-4">
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
-                      event.source === 'calendar' ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-600'
-                    }`}>
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${event.source === 'calendar' ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-600'
+                      }`}>
                       {event.source === 'calendar' ? <Calendar size={20} /> : <FileText size={20} />}
                     </div>
                     <div>
                       <h4 className="font-bold text-sm">{event.title}</h4>
-                      <p className="text-xs text-black/40 font-medium">  {new Date(event.start_time).toLocaleDateString('en-US', {    month: 'short',    day: 'numeric',  })}{' '}  • {event.category}{event.location ? ` • ${event.location}` : ''}</p>
+                      <p className="text-xs text-black/40 font-medium">{new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} • {event.category}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                  <p className="font-bold text-sm">-${event.estimated_cost.toFixed(2)}</p>
-                  <p className="text-[10px] font-bold text-black/20 uppercase tracking-tighter">ESTIMATED</p>
+                    <p className="font-bold text-sm">-${event.estimated_cost}</p>
+                    <p className="text-[10px] font-bold text-black/20 uppercase tracking-tighter">ESTIMATED</p>
                   </div>
                 </Card>
               ))}
@@ -247,14 +272,14 @@ export default function App() {
                 </div>
                 <h3 className="font-bold">Paper-to-Plan</h3>
                 <p className="text-xs text-black/40 mt-1 px-12">Upload leases, bills, or receipts. Gemini will extract the dates and costs.</p>
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  className="hidden" 
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
                   onChange={handleFileUpload}
                   accept="image/*,application/pdf"
                 />
-                <button 
+                <button
                   onClick={() => fileInputRef.current?.click()}
                   className="mt-6 px-6 py-3 bg-black text-white text-xs font-bold rounded-2xl uppercase tracking-widest active:scale-95 transition-transform"
                 >
@@ -300,13 +325,22 @@ export default function App() {
                       <p className="text-xs font-bold text-emerald-600">${circle.current_savings} / ${circle.goal_amount}</p>
                     </div>
                     <div className="h-2 w-full bg-black/5 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-emerald-500 rounded-full" 
+                      <div
+                        className="h-full bg-emerald-500 rounded-full"
                         style={{ width: `${(circle.current_savings / circle.goal_amount) * 100}%` }}
                       />
                     </div>
                   </Card>
                 ))}
+
+                <div className="flex gap-4 pt-2">
+                  <button className="flex-1 bg-black text-white py-4 rounded-2xl text-sm font-bold active:scale-95 transition-transform flex items-center justify-center gap-2">
+                    <Plus size={18} /> Create Circle
+                  </button>
+                  <button className="flex-1 bg-white border border-black/10 py-4 rounded-2xl text-sm font-bold active:scale-95 transition-transform flex items-center justify-center gap-2">
+                    <Users size={18} /> Join Circle
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-4">
@@ -344,7 +378,7 @@ export default function App() {
         <button className="p-2 text-black"><Calendar size={24} /></button>
         <button className="p-2 text-black/20"><TrendingUp size={24} /></button>
         <div className="relative -top-8">
-          <button 
+          <button
             onClick={() => setActiveTab('docs')}
             className="w-14 h-14 bg-black rounded-full shadow-xl flex items-center justify-center text-white active:scale-90 transition-transform"
           >

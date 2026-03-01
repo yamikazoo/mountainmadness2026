@@ -10,7 +10,6 @@ import googleRouter from "./routes/google";
 import { supabaseAdmin } from "./services/supabase";
 import predictRouter from "./routes/predict";
 
-
 dotenv.config({ path: ".env", override: true });
 
 const __filename = fileURLToPath(import.meta.url);
@@ -82,26 +81,23 @@ async function startServer() {
     res.json({ ok: true, message: "Server is running" });
   });
 
-  // Supabase test route
+  // API routes
   app.use("/api", testSupabaseRouter);
-
-    // google
   app.use("/api", googleRouter);
-//prediction
   app.use("/api", predictRouter);
 
-  // updated events 5pm
+  // Events from Supabase
   app.get("/api/events", async (_req, res) => {
     try {
       const { data, error } = await supabaseAdmin
         .from("events")
         .select("*")
         .order("start_time", { ascending: true });
-  
+
       if (error) {
         return res.status(500).json({ error: error.message });
       }
-  
+
       return res.json(data);
     } catch (error) {
       console.error("GET /api/events error:", error);
@@ -109,7 +105,6 @@ async function startServer() {
     }
   });
 
-  // updated 2nd event 5 pm
   app.post("/api/events", async (req, res) => {
     try {
       const {
@@ -122,7 +117,7 @@ async function startServer() {
         category,
         source,
       } = req.body;
-  
+
       const { data, error } = await supabaseAdmin
         .from("events")
         .insert([
@@ -139,11 +134,11 @@ async function startServer() {
         ])
         .select()
         .single();
-  
+
       if (error) {
         return res.status(500).json({ error: error.message });
       }
-  
+
       return res.json(data);
     } catch (error) {
       console.error("POST /api/events error:", error);
@@ -151,6 +146,7 @@ async function startServer() {
     }
   });
 
+  // Social data still from local SQLite
   app.get("/api/social", (_req, res) => {
     const circles = db.prepare("SELECT * FROM social_circles").all();
     const leaderboard = db
@@ -160,6 +156,7 @@ async function startServer() {
     res.json({ circles, leaderboard });
   });
 
+  // ElevenLabs TTS
   app.post("/api/tts", async (req, res) => {
     const { text } = req.body;
     const apiKey = process.env.ELEVENLABS_API_KEY;
@@ -213,9 +210,9 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(path.join(__dirname, "dist")));
+    app.use(express.static(path.join(__dirname, "..", "dist")));
     app.get("*", (_req, res) => {
-      res.sendFile(path.join(__dirname, "dist", "index.html"));
+      res.sendFile(path.join(__dirname, "..", "dist", "index.html"));
     });
   }
 
