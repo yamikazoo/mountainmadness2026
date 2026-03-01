@@ -5,10 +5,10 @@ import Database from "better-sqlite3";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
-import testSupabaseRouter from "./routes/testSupabase";
-import googleRouter from "./routes/google";
-import { supabaseAdmin } from "./services/supabase";
-import predictRouter from "./routes/predict";
+import testSupabaseRouter from "../routes/testSupabase";
+import googleRouter from "../routes/google";
+import { supabaseAdmin } from "../services/supabase";
+import predictRouter from "../routes/predict";
 
 dotenv.config({ path: ".env", override: true });
 
@@ -180,7 +180,7 @@ async function startServer() {
           },
           body: JSON.stringify({
             text,
-            model_id: "eleven_monolingual_v1",
+            model_id: "eleven_monolingual_v2",
             voice_settings: {
               stability: 0.5,
               similarity_boost: 0.5,

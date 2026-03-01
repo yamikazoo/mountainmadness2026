@@ -246,8 +246,8 @@ export default function App() {
                     </div>
                     <div>
                       <h4 className="font-bold text-sm">{event.title}</h4>
-                      <p className="text-xs text-black/40 font-medium">{new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} • {event.category}</p>
-                    </div>
+                      <p className="text-xs text-black/40 font-medium"> {new Date((event as any).start_time ?? event.date).toLocaleDateString('en-US', {month: 'short',day: 'numeric',})} • {event.category}
+</p>                 </div>
                   </div>
                   <div className="text-right">
                     <p className="font-bold text-sm">-${event.estimated_cost}</p>

@@ -13,3 +13,4 @@ coverage/
 node_modules
 distfinsync.db
 .next
+finsync.db
