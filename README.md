@@ -20,7 +20,7 @@ All this is enveloped using an easy to use interface complete with charts and vi
 
 ---
 
-## ✨ Key Features
+## Key Features
 
 ### 1. The Financial Time-Machine (RBC Challenge)
 
@@ -38,7 +38,7 @@ All this is enveloped using an easy to use interface complete with charts and vi
 * **Loss Aversion Gamification:** A saving and expenses leaderboard helps keep you and your friends in check. If someone slips and starts spending, they fall down the leaderboard and everyone will be made aware of their poor financial habits.
 
 * 
-### 🎙️ 4. The Morning "Hype" Briefing
+### 4. The Morning "Hype" Briefing
 
 * **ElevenLabs Integration:** Busy or a TLDR kind of person? We have a feature where you can receive a 30-second high-fidelity audio brief about your upcoming expenses and financial advice.
 * *“Hey Calvin, you’ve got a busy day. You’re meeting friends for dinner—aim for under $30 to keep your Whistler streak alive!”*
@@ -59,19 +59,7 @@ All this is enveloped using an easy to use interface complete with charts and vi
 
 ---
 
-## 🏆 Prize Track Alignment
-
-| Track | Implementation |
-| --- | --- |
-| **RBC Personal Finance** | Focus on "Multi-calendar life" and "Social dynamics" through predictive event-based budgeting. |
-| **[MLH] Best Use of Gemini** | Multimodal RAG to process images/PDFs of financial documents and extract structured JSON data. |
-| **[MLH] Best Use of ElevenLabs** | Dynamic "Financial Coach" voices that provide daily verbal summaries and social nudges. |
-| **[MLH] Best Use of Snowflake** | Utilizing the Snowflake API for high-performance vector storage and community spending analytics. |
-| **Best UI/UX** | A clean, "Calendar-first" dashboard that visualizes the future of your wallet. |
-
----
-
-## 🚀 Getting Started
+## Getting Started
 
 1. **Clone the repo:** `git clone https://github.com/your-team/finsync`
 2. **Install dependencies:** `npm install`
