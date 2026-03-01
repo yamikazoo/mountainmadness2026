@@ -15,9 +15,22 @@ import {
   Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { predictEventCosts, parseFinancialDocument, generateBriefingText, FinancialEvent } from './services/geminiService';
-
+import { predictEventCosts, parseFinancialDocument, generateBriefingText } from './services/geminiService';
 // --- Components ---
+type AppEvent = {
+  id: number;
+  google_event_id?: string | null;
+  title: string;
+  description?: string | null;
+  location?: string | null;
+  start_time: string;
+  end_time?: string | null;
+  estimated_cost: number;
+  category: string;
+  source: 'calendar' | 'document';
+  created_at?: string;
+  updated_at?: string;
+};
 
 const Card = ({ children, className = "" }: { children: React.ReactNode, className?: string, key?: React.Key }) => (
   <div className={`bg-white rounded-3xl p-6 shadow-sm border border-black/5 ${className}`}>
@@ -41,7 +54,7 @@ const Stat = ({ label, value, icon: Icon, color }: { label: string, value: strin
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'calendar' | 'docs' | 'social'>('calendar');
-  const [events, setEvents] = useState<FinancialEvent[]>([]);
+  const [events, setEvents] = useState<AppEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [isBriefing, setIsBriefing] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -56,7 +69,13 @@ export default function App() {
   const fetchEvents = async () => {
     const res = await fetch('/api/events');
     const data = await res.json();
-    setEvents(data);
+  
+    const normalizedEvents: AppEvent[] = (data || []).map((event: any) => ({
+      ...event,
+      estimated_cost: Number(event.estimated_cost ?? 0),
+    }));
+  
+    setEvents(normalizedEvents);
   };
 
   const fetchSocial = async () => {
@@ -156,7 +175,7 @@ export default function App() {
             <h2 className="text-4xl font-bold mt-1">${totalUpcoming.toLocaleString()}</h2>
             <div className="mt-4 flex items-center gap-2 text-emerald-400 text-xs font-bold">
               <ArrowUpRight size={14} />
-              <span>Predicted from 8 events</span>
+              <span>Predicted from {events.length} events</span>
             </div>
           </Card>
         </div>
@@ -202,12 +221,12 @@ export default function App() {
                     </div>
                     <div>
                       <h4 className="font-bold text-sm">{event.title}</h4>
-                      <p className="text-xs text-black/40 font-medium">{new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} • {event.category}</p>
+                      <p className="text-xs text-black/40 font-medium">  {new Date(event.start_time).toLocaleDateString('en-US', {    month: 'short',    day: 'numeric',  })}{' '}  • {event.category}{event.location ? ` • ${event.location}` : ''}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold text-sm">-${event.estimated_cost}</p>
-                    <p className="text-[10px] font-bold text-black/20 uppercase tracking-tighter">ESTIMATED</p>
+                  <p className="font-bold text-sm">-${event.estimated_cost.toFixed(2)}</p>
+                  <p className="text-[10px] font-bold text-black/20 uppercase tracking-tighter">ESTIMATED</p>
                   </div>
                 </Card>
               ))}

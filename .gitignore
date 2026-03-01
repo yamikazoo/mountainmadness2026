@@ -6,3 +6,9 @@ coverage/
 *.log
 .env*
 !.env.example
+
+#alex
+.env
+.env.local
+node_modules
+dist

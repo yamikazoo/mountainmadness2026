@@ -1,18 +1,24 @@
 import express from "express";
+import cors from "cors";
 import { createServer as createViteServer } from "vite";
 import Database from "better-sqlite3";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
+import testSupabaseRouter from "./routes/testSupabase";
+import googleRouter from "./routes/google";
+import { supabaseAdmin } from "./services/supabase";
+import predictRouter from "./routes/predict";
 
-dotenv.config();
+
+dotenv.config({ path: ".env", override: true });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const db = new Database("finsync.db");
 
-// Initialize Database
+// Initialize SQLite Database
 db.exec(`
   CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -20,7 +26,7 @@ db.exec(`
     date TEXT,
     estimated_cost REAL,
     category TEXT,
-    source TEXT -- 'calendar' or 'document'
+    source TEXT
   );
 
   CREATE TABLE IF NOT EXISTS documents (
@@ -45,75 +51,146 @@ db.exec(`
   );
 `);
 
-// Seed data if empty
+// Seed SQLite data if empty
 const eventCount = db.prepare("SELECT COUNT(*) as count FROM events").get() as { count: number };
 if (eventCount.count === 0) {
-  db.prepare("INSERT INTO events (title, date, estimated_cost, category, source) VALUES (?, ?, ?, ?, ?)").run(
-    "Whistler Trip", "2026-03-15", 450.00, "Travel", "calendar"
-  );
-  db.prepare("INSERT INTO events (title, date, estimated_cost, category, source) VALUES (?, ?, ?, ?, ?)").run(
-    "Rent Payment", "2026-03-01", 1200.00, "Housing", "document"
-  );
+  db.prepare(
+    "INSERT INTO events (title, date, estimated_cost, category, source) VALUES (?, ?, ?, ?, ?)"
+  ).run("Whistler Trip", "2026-03-15", 450.0, "Travel", "calendar");
+
+  db.prepare(
+    "INSERT INTO events (title, date, estimated_cost, category, source) VALUES (?, ?, ?, ?, ?)"
+  ).run("Rent Payment", "2026-03-01", 1200.0, "Housing", "document");
 }
 
 const circleCount = db.prepare("SELECT COUNT(*) as count FROM social_circles").get() as { count: number };
 if (circleCount.count === 0) {
-  db.prepare("INSERT INTO social_circles (name, goal_amount, current_savings) VALUES (?, ?, ?)").run(
-    "Grad Trip Fund", 5000.00, 1250.00
-  );
+  db.prepare(
+    "INSERT INTO social_circles (name, goal_amount, current_savings) VALUES (?, ?, ?)"
+  ).run("Grad Trip Fund", 5000.0, 1250.0);
 }
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3001;
 
-  app.use(express.json({ limit: '50mb' }));
+  app.use(cors());
+  app.use(express.json({ limit: "50mb" }));
 
-  // API Routes
-  app.get("/api/events", (req, res) => {
-    const events = db.prepare("SELECT * FROM events ORDER BY date ASC").all();
-    res.json(events);
+  // Health
+  app.get("/health", (_req, res) => {
+    res.json({ ok: true, message: "Server is running" });
   });
 
-  app.post("/api/events", (req, res) => {
-    const { title, date, estimated_cost, category, source } = req.body;
-    const info = db.prepare("INSERT INTO events (title, date, estimated_cost, category, source) VALUES (?, ?, ?, ?, ?)").run(
-      title, date, estimated_cost, category, source
-    );
-    res.json({ id: info.lastInsertRowid });
+  // Supabase test route
+  app.use("/api", testSupabaseRouter);
+
+    // google
+  app.use("/api", googleRouter);
+//prediction
+  app.use("/api", predictRouter);
+
+  // updated events 5pm
+  app.get("/api/events", async (_req, res) => {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from("events")
+        .select("*")
+        .order("start_time", { ascending: true });
+  
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+  
+      return res.json(data);
+    } catch (error) {
+      console.error("GET /api/events error:", error);
+      return res.status(500).json({ error: "Failed to fetch events" });
+    }
   });
 
-  app.get("/api/social", (req, res) => {
+  // updated 2nd event 5 pm
+  app.post("/api/events", async (req, res) => {
+    try {
+      const {
+        title,
+        description,
+        location,
+        start_time,
+        end_time,
+        estimated_cost,
+        category,
+        source,
+      } = req.body;
+  
+      const { data, error } = await supabaseAdmin
+        .from("events")
+        .insert([
+          {
+            title,
+            description: description || null,
+            location: location || null,
+            start_time,
+            end_time: end_time || null,
+            estimated_cost: estimated_cost ?? 0,
+            category: category || "Uncategorized",
+            source: source || "calendar",
+          },
+        ])
+        .select()
+        .single();
+  
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+  
+      return res.json(data);
+    } catch (error) {
+      console.error("POST /api/events error:", error);
+      return res.status(500).json({ error: "Failed to create event" });
+    }
+  });
+
+  app.get("/api/social", (_req, res) => {
     const circles = db.prepare("SELECT * FROM social_circles").all();
-    const leaderboard = db.prepare("SELECT * FROM leaderboard ORDER BY savings_score DESC").all();
+    const leaderboard = db
+      .prepare("SELECT * FROM leaderboard ORDER BY savings_score DESC")
+      .all();
+
     res.json({ circles, leaderboard });
   });
 
   app.post("/api/tts", async (req, res) => {
     const { text } = req.body;
     const apiKey = process.env.ELEVENLABS_API_KEY;
-    const voiceId = process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM";
+    const voiceId =
+      process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM";
 
     if (!apiKey) {
-      return res.status(400).json({ error: "ElevenLabs API key not configured" });
+      return res
+        .status(400)
+        .json({ error: "ElevenLabs API key not configured" });
     }
 
     try {
-      const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "xi-api-key": apiKey,
-        },
-        body: JSON.stringify({
-          text,
-          model_id: "eleven_monolingual_v1",
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.5,
+      const response = await fetch(
+        `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "xi-api-key": apiKey,
           },
-        }),
-      });
+          body: JSON.stringify({
+            text,
+            model_id: "eleven_monolingual_v1",
+            voice_settings: {
+              stability: 0.5,
+              similarity_boost: 0.5,
+            },
+          }),
+        }
+      );
 
       if (!response.ok) {
         throw new Error("ElevenLabs API error");
@@ -137,7 +214,7 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     app.use(express.static(path.join(__dirname, "dist")));
-    app.get("*", (req, res) => {
+    app.get("*", (_req, res) => {
       res.sendFile(path.join(__dirname, "dist", "index.html"));
     });
   }
