@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import { createServer as createViteServer } from "vite";
-import Database from "better-sqlite3";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
@@ -14,60 +13,6 @@ dotenv.config({ path: ".env", override: true });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-const db = new Database("finsync.db");
-
-// Initialize SQLite Database
-db.exec(`
-  CREATE TABLE IF NOT EXISTS events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT,
-    date TEXT,
-    estimated_cost REAL,
-    category TEXT,
-    source TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS documents (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    filename TEXT,
-    upload_date TEXT,
-    content_summary TEXT,
-    total_amount REAL
-  );
-
-  CREATE TABLE IF NOT EXISTS social_circles (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT,
-    goal_amount REAL,
-    current_savings REAL
-  );
-
-  CREATE TABLE IF NOT EXISTS leaderboard (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_name TEXT,
-    savings_score INTEGER
-  );
-`);
-
-// Seed SQLite data if empty
-const eventCount = db.prepare("SELECT COUNT(*) as count FROM events").get() as { count: number };
-if (eventCount.count === 0) {
-  db.prepare(
-    "INSERT INTO events (title, date, estimated_cost, category, source) VALUES (?, ?, ?, ?, ?)"
-  ).run("Whistler Trip", "2026-03-15", 450.0, "Travel", "calendar");
-
-  db.prepare(
-    "INSERT INTO events (title, date, estimated_cost, category, source) VALUES (?, ?, ?, ?, ?)"
-  ).run("Rent Payment", "2026-03-01", 1200.0, "Housing", "document");
-}
-
-const circleCount = db.prepare("SELECT COUNT(*) as count FROM social_circles").get() as { count: number };
-if (circleCount.count === 0) {
-  db.prepare(
-    "INSERT INTO social_circles (name, goal_amount, current_savings) VALUES (?, ?, ?)"
-  ).run("Grad Trip Fund", 5000.0, 1250.0);
-}
 
 async function startServer() {
   const app = express();
@@ -147,11 +92,15 @@ async function startServer() {
   });
 
   // Social data still from local SQLite
+  // Mock social data until Supabase schema is ready
   app.get("/api/social", (_req, res) => {
-    const circles = db.prepare("SELECT * FROM social_circles").all();
-    const leaderboard = db
-      .prepare("SELECT * FROM leaderboard ORDER BY savings_score DESC")
-      .all();
+    const circles = [{ id: 1, name: "Grad Trip Fund", goal_amount: 5000.00, current_savings: 1250.00 }];
+    const leaderboard = [
+      { id: 1, user_name: "Alex Chen", savings_score: 1250.00, predicted_spending: 2400.00 },
+      { id: 2, user_name: "Sarah J.", savings_score: 980.00, predicted_spending: 3100.00 },
+      { id: 3, user_name: "You", savings_score: 850.00, predicted_spending: 2100.00 },
+      { id: 4, user_name: "Marcus T.", savings_score: 420.00, predicted_spending: 4500.00 }
+    ];
 
     res.json({ circles, leaderboard });
   });
@@ -170,27 +119,26 @@ async function startServer() {
     }
 
     try {
-      const response = await fetch(
-        `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "xi-api-key": apiKey,
+      const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "xi-api-key": apiKey,
+        },
+        body: JSON.stringify({
+          text,
+          model_id: "eleven_multilingual_v2",
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.5,
           },
-          body: JSON.stringify({
-            text,
-            model_id: "eleven_monolingual_v2",
-            voice_settings: {
-              stability: 0.5,
-              similarity_boost: 0.5,
-            },
-          }),
-        }
-      );
+        }),
+      });
 
       if (!response.ok) {
-        throw new Error("ElevenLabs API error");
+        const errorText = await response.text();
+        console.error("ElevenLabs API full error:", errorText);
+        throw new Error(`ElevenLabs API error: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const audioBuffer = await response.arrayBuffer();

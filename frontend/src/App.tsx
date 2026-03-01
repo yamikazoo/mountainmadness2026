@@ -141,7 +141,7 @@ export default function App() {
       <header className="px-6 pt-12 pb-6 flex justify-between items-end">
         <div>
           <h1 className="text-4xl font-serif italic font-bold tracking-tight">FinSync</h1>
-          <p className="text-black/40 font-medium text-sm mt-1">Temporal Wealth Agent</p>
+          <p className="text-black/40 font-medium text-sm mt-1">Your Temporal Wealth Agent</p>
         </div>
         <button
           onClick={handleBriefing}
@@ -345,28 +345,48 @@ export default function App() {
 
               <div className="space-y-4">
                 <h3 className="text-lg font-bold">Leaderboard</h3>
-                <Card className="p-0 overflow-hidden">
-                  {socialData?.leaderboard.map((user: any, idx: number) => (
-                    <div key={user.id} className={`flex items-center justify-between p-4 ${idx !== 0 ? 'border-t border-black/5' : ''}`}>
-                      <div className="flex items-center gap-4">
-                        <span className="text-xs font-bold text-black/20 w-4">{idx + 1}</span>
-                        <div className="w-8 h-8 bg-black/5 rounded-full flex items-center justify-center text-xs font-bold">
-                          {user.user_name[0]}
+                <div className="space-y-3">
+                  {socialData?.leaderboard.map((user: any, idx: number) => {
+                    const goalAmount = socialData?.circles?.[0]?.goal_amount || 5000;
+                    const savePercent = Math.min((user.savings_score / goalAmount) * 100, 100);
+
+                    return (
+                      <div key={user.id} className="bg-white rounded-2xl p-4 shadow-sm border border-black/5 relative overflow-hidden group hover:border-black/20 transition-all">
+                        {/* Progress Background */}
+                        <div className="absolute top-0 left-0 h-full bg-emerald-500/10 transition-all duration-500" style={{ width: `${savePercent}%` }} />
+
+                        <div className="relative z-10 flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <span className={`text-sm font-bold w-4 ${idx === 0 ? 'text-amber-500' : 'text-black/30'}`}>{idx + 1}</span>
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold ${idx === 0 ? 'bg-amber-100 text-amber-700' : 'bg-black/5 text-black/60'}`}>
+                              {user.user_name[0]}
+                            </div>
+                            <div>
+                              <p className="font-bold">{user.user_name}</p>
+                              {idx === 0 && <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-100 text-amber-700 rounded-md uppercase tracking-wider">Leader</span>}
+                            </div>
+                          </div>
+
+                          <div className="text-right flex flex-col items-end gap-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-bold text-black/40 uppercase tracking-widest">Saved</span>
+                              <span className="font-bold text-emerald-600">${user.savings_score.toLocaleString()}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-bold text-black/30 uppercase tracking-widest">Predicted Spend</span>
+                              <span className="text-xs font-bold text-black/60">${user.predicted_spending.toLocaleString()}</span>
+                            </div>
+                          </div>
                         </div>
-                        <p className="text-sm font-bold">{user.user_name}</p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Trophy size={14} className={idx === 0 ? 'text-amber-400' : 'text-black/10'} />
-                        <span className="text-sm font-bold">{user.savings_score} pts</span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {!socialData?.leaderboard.length && (
-                    <div className="p-8 text-center text-black/40 text-xs font-medium">
+                    <Card className="p-8 text-center text-black/40 text-xs font-medium">
                       Join a circle to see the leaderboard
-                    </div>
+                    </Card>
                   )}
-                </Card>
+                </div>
               </div>
             </motion.div>
           )}
