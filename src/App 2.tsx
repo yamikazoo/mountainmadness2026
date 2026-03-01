@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Calendar, 
   Upload, 
@@ -12,13 +12,10 @@ import {
   ArrowUpRight,
   Trophy,
   Volume2,
-  Loader2,
-  LogIn,
-  LogOut,
-  AlertTriangle
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { parseFinancialDocument, generateBriefingText, FinancialEvent } from './services/geminiService';
+import { predictEventCosts, parseFinancialDocument, generateBriefingText, FinancialEvent } from './services/geminiService';
 
 // --- Components ---
 
@@ -28,47 +25,17 @@ const Card = ({ children, className = "" }: { children: React.ReactNode, classNa
   </div>
 );
 
-interface AuthState {
-  authenticated: boolean;
-  user?: {
-    email?: string;
-    name?: string;
-    picture?: string;
-  };
-}
-
-interface CalendarEvent {
-  id: string;
-  title: string;
-  start: string;
-  end: string;
-  location?: string;
-  source: 'google-calendar';
-}
-
-interface CalendarResponse {
-  events: CalendarEvent[];
-  isFallback: boolean;
-  fallbackReason?: string;
-}
-
-interface SocialCircle {
-  id: number;
-  name: string;
-  goal_amount: number;
-  current_savings: number;
-}
-
-interface LeaderboardUser {
-  id: number;
-  user_name: string;
-  savings_score: number;
-}
-
-interface SocialData {
-  circles: SocialCircle[];
-  leaderboard: LeaderboardUser[];
-}
+const Stat = ({ label, value, icon: Icon, color }: { label: string, value: string, icon: any, color: string }) => (
+  <div className="flex items-center gap-4">
+    <div className={`p-3 rounded-2xl ${color}`}>
+      <Icon size={20} className="text-white" />
+    </div>
+    <div>
+      <p className="text-xs font-medium text-black/40 uppercase tracking-wider">{label}</p>
+      <p className="text-xl font-bold">{value}</p>
+    </div>
+  </div>
+);
 
 // --- Main App ---
 
@@ -77,122 +44,25 @@ export default function App() {
   const [events, setEvents] = useState<FinancialEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [isBriefing, setIsBriefing] = useState(false);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [authState, setAuthState] = useState<AuthState>({ authenticated: false });
-  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
-  const [calendarFallbackReason, setCalendarFallbackReason] = useState<string | null>(null);
-  const [socialData, setSocialData] = useState<SocialData | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [socialData, setSocialData] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const bootstrap = useCallback(async () => {
-    setAuthLoading(true);
-    const session = await fetchAuthSession();
-    setAuthState(session);
-
-    if (session.authenticated) {
-      await Promise.all([fetchEvents(), fetchSocial(), fetchCalendarEvents()]);
-    }
-
-    setAuthLoading(false);
+  useEffect(() => {
+    fetchEvents();
+    fetchSocial();
   }, []);
 
-  useEffect(() => {
-    void bootstrap();
-  }, [bootstrap]);
-
-  const fetchAuthSession = async (): Promise<AuthState> => {
-    try {
-      const res = await fetch('/api/auth/session', {
-        credentials: 'include',
-      });
-      if (!res.ok) {
-        return { authenticated: false };
-      }
-      return (await res.json()) as AuthState;
-    } catch (error) {
-      console.error(error);
-      return { authenticated: false };
-    }
-  };
-
-  const fetchCalendarEvents = async () => {
-    try {
-      const res = await fetch('/api/calendar/events', {
-        credentials: 'include',
-      });
-
-      if (res.status === 401) {
-        setAuthState({ authenticated: false });
-        return;
-      }
-
-      const data = (await res.json()) as CalendarResponse;
-      setCalendarEvents(data.events ?? []);
-      setCalendarFallbackReason(data.isFallback ? (data.fallbackReason ?? 'unknown') : null);
-    } catch (error) {
-      console.error(error);
-      setCalendarEvents([]);
-      setCalendarFallbackReason('network');
-    }
-  };
-
   const fetchEvents = async () => {
-    const res = await fetch('/api/events', { credentials: 'include' });
+    const res = await fetch('/api/events');
     const data = await res.json();
     setEvents(data);
   };
 
   const fetchSocial = async () => {
-    const res = await fetch('/api/social', { credentials: 'include' });
-    const data = (await res.json()) as SocialData;
+    const res = await fetch('/api/social');
+    const data = await res.json();
     setSocialData(data);
-  };
-
-  const handleLogin = () => {
-    window.location.href = '/auth/google';
-  };
-
-  const handleLogout = async () => {
-    await fetch('/api/auth/logout', {
-      method: 'POST',
-      credentials: 'include',
-    });
-    setAuthState({ authenticated: false });
-    setCalendarEvents([]);
-    setSocialData(null);
-    setEvents([]);
-  };
-
-  const formatCalendarEventTime = (event: CalendarEvent) => {
-    const start = new Date(event.start);
-    const end = new Date(event.end);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-      return 'Date unavailable';
-    }
-
-    const sameDay = start.toDateString() === end.toDateString();
-    const day = start.toLocaleDateString('en-CA', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
-    const startTime = start.toLocaleTimeString('en-CA', {
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-    const endTime = end.toLocaleTimeString('en-CA', {
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-
-    if (sameDay) {
-      return `${day} • ${startTime} - ${endTime}`;
-    }
-    return `${day} ${startTime} - ${end.toLocaleDateString('en-CA', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    })} ${endTime}`;
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -201,23 +71,22 @@ export default function App() {
 
     setLoading(true);
     try {
-      const base64Data = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve((reader.result as string).split(',')[1]);
-        reader.onerror = () => reject(new Error('Failed to read file.'));
-        reader.readAsDataURL(file);
-      });
-      const parsedEvents = await parseFinancialDocument(base64Data, file.type);
-
-      for (const event of parsedEvents) {
-        await fetch('/api/events', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(event)
-        });
-      }
-      await fetchEvents();
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = (reader.result as string).split(',')[1];
+        const parsedEvents = await parseFinancialDocument(base64, file.type);
+        
+        // Save to DB
+        for (const event of parsedEvents) {
+          await fetch('/api/events', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(event)
+          });
+        }
+        fetchEvents();
+      };
+      reader.readAsDataURL(file);
     } catch (err) {
       console.error(err);
     } finally {
@@ -232,7 +101,6 @@ export default function App() {
       const text = await generateBriefingText(events.slice(0, 3));
       const res = await fetch('/api/tts', {
         method: 'POST',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text })
       });
@@ -240,8 +108,9 @@ export default function App() {
       if (res.ok) {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
+        setAudioUrl(url);
         const audio = new Audio(url);
-        await audio.play();
+        audio.play();
         audio.onended = () => setIsBriefing(false);
       } else {
         alert("ElevenLabs API key missing or invalid. Check .env");
@@ -254,42 +123,6 @@ export default function App() {
   };
 
   const totalUpcoming = events.reduce((sum, e) => sum + e.estimated_cost, 0);
-
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-[#F9F9F7] flex items-center justify-center">
-        <div className="flex items-center gap-3 text-black/60">
-          <Loader2 className="animate-spin" />
-          <span className="text-sm font-medium">Loading your dashboard...</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (!authState.authenticated) {
-    return (
-      <div className="min-h-screen bg-[#F9F9F7] flex items-center justify-center px-6">
-        <Card className="max-w-md w-full text-center space-y-5">
-          <div className="w-14 h-14 bg-black text-white rounded-2xl flex items-center justify-center mx-auto">
-            <Calendar size={24} />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold">NOMI Pivot</h1>
-            <p className="text-sm text-black/60 mt-2">
-              Sign in with Google to load your next 7 days and unlock spend pivots.
-            </p>
-          </div>
-          <button
-            onClick={handleLogin}
-            className="w-full bg-black text-white py-3 rounded-2xl font-bold flex items-center justify-center gap-2"
-          >
-            <LogIn size={16} />
-            Sign in with Google
-          </button>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen max-w-md mx-auto bg-[#F9F9F7] pb-24 relative overflow-hidden">
@@ -310,14 +143,6 @@ export default function App() {
 
       {/* Main Content */}
       <main className="px-6 space-y-6">
-        <div className="flex items-center justify-between text-xs text-black/50">
-          <span>{authState.user?.name ?? authState.user?.email ?? 'Signed in'}</span>
-          <button onClick={handleLogout} className="flex items-center gap-1 font-semibold text-black">
-            <LogOut size={14} />
-            Logout
-          </button>
-        </div>
-
         {/* Quick Stats */}
         <div className="grid grid-cols-1 gap-4">
           <Card className="bg-black text-white border-none">
@@ -331,7 +156,7 @@ export default function App() {
             <h2 className="text-4xl font-bold mt-1">${totalUpcoming.toLocaleString()}</h2>
             <div className="mt-4 flex items-center gap-2 text-emerald-400 text-xs font-bold">
               <ArrowUpRight size={14} />
-              <span>Predicted from {events.length} events</span>
+              <span>Predicted from 8 events</span>
             </div>
           </Card>
         </div>
@@ -363,39 +188,29 @@ export default function App() {
             >
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-bold">Financial Time-Machine</h3>
-                <span className="text-xs font-semibold text-black/50">{calendarEvents.length} events</span>
+                <button className="p-2 bg-black/5 rounded-full text-black/40">
+                  <Plus size={20} />
+                </button>
               </div>
-              {calendarFallbackReason && (
-                <Card className="border-amber-200 bg-amber-50 text-amber-900 flex items-start gap-3">
-                  <AlertTriangle size={18} className="mt-0.5" />
-                  <div>
-                    <p className="font-semibold text-sm">Demo mode fallback</p>
-                    <p className="text-xs mt-1">
-                      Showing sample events because Google Calendar was unavailable ({calendarFallbackReason}).
-                    </p>
+              {events.map((event, idx) => (
+                <Card key={idx} className="flex items-center justify-between group hover:border-black/20 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
+                      event.source === 'calendar' ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-600'
+                    }`}>
+                      {event.source === 'calendar' ? <Calendar size={20} /> : <FileText size={20} />}
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm">{event.title}</h4>
+                      <p className="text-xs text-black/40 font-medium">{new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} • {event.category}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-sm">-${event.estimated_cost}</p>
+                    <p className="text-[10px] font-bold text-black/20 uppercase tracking-tighter">ESTIMATED</p>
                   </div>
                 </Card>
-              )}
-
-              <div className="grid grid-cols-1 gap-3">
-                {calendarEvents.length === 0 && (
-                  <Card>
-                    <p className="text-sm text-black/60">No upcoming events in the next 7 days.</p>
-                  </Card>
-                )}
-                {calendarEvents.map((event) => (
-                  <Card key={event.id} className="space-y-2 hover:border-black/20 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-bold text-sm">{event.title}</h4>
-                      <span className="text-[10px] px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 font-semibold uppercase">
-                        Google
-                      </span>
-                    </div>
-                    <p className="text-xs text-black/50">{formatCalendarEventTime(event)}</p>
-                    <p className="text-xs text-black/40">{event.location ?? 'Location not specified'}</p>
-                  </Card>
-                ))}
-              </div>
+              ))}
             </motion.div>
           )}
 
@@ -454,7 +269,7 @@ export default function App() {
             >
               <div className="space-y-4">
                 <h3 className="text-lg font-bold">Savings Circles</h3>
-                {socialData?.circles.map((circle) => (
+                {socialData?.circles.map((circle: any) => (
                   <Card key={circle.id} className="space-y-4">
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-3">
@@ -478,7 +293,7 @@ export default function App() {
               <div className="space-y-4">
                 <h3 className="text-lg font-bold">Leaderboard</h3>
                 <Card className="p-0 overflow-hidden">
-                  {socialData?.leaderboard.map((user, idx: number) => (
+                  {socialData?.leaderboard.map((user: any, idx: number) => (
                     <div key={user.id} className={`flex items-center justify-between p-4 ${idx !== 0 ? 'border-t border-black/5' : ''}`}>
                       <div className="flex items-center gap-4">
                         <span className="text-xs font-bold text-black/20 w-4">{idx + 1}</span>

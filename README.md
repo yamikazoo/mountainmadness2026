@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NOMI Pivot (Current Stack MVP)
 
-## Getting Started
+NOMI Pivot is a proactive personal finance prototype for SFU Mountain Madness and the RBC FutureSpend challenge.  
+This repo currently runs on **React + Vite frontend** with an **Express backend**.
 
-First, run the development server:
+## What is implemented in Sprint 1/2
+
+- Google OAuth login with scope: `https://www.googleapis.com/auth/calendar.readonly`
+- Session-based backend auth (`HttpOnly` cookie)
+- Server endpoint to fetch next 7 days of Google Calendar events
+- Robust fallback to 3 realistic mock events for demo reliability
+- Auth-gated dashboard experience with calendar event cards
+- Gemini calls moved server-side (no client-side API key exposure)
+
+## Tech stack
+
+- Frontend: React + Tailwind CSS + Lucide + Motion
+- Backend: Express + better-sqlite3
+- AI: Gemini API + ElevenLabs
+- Auth: Google OAuth (server-managed)
+
+## Local setup
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Copy env template and fill values:
+
+```bash
+cp .env.example .env.local
+```
+
+3. Add required values in `.env.local`:
+
+- `SESSION_SECRET`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_REDIRECT_URI` (default: `http://localhost:3000/auth/google/callback`)
+- `GEMINI_API_KEY`
+
+4. Run:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+5. Open:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+`http://localhost:3000`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Google OAuth Console checklist
 
-## Learn More
+In Google Cloud Console:
 
-To learn more about Next.js, take a look at the following resources:
+1. Enable **Google Calendar API**
+2. Configure OAuth consent screen
+3. Add scope:
+   - `https://www.googleapis.com/auth/calendar.readonly`
+4. Create OAuth Client (Web application)
+5. Add Authorized redirect URI:
+   - `http://localhost:3000/auth/google/callback`
+6. Add your teammate/tester emails to **Test users** while app is in testing mode
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Demo behavior
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Signed-out users must log in with Google.
+- Signed-in users see a calendar grid for the next 7 days.
+- If Google API is unavailable/rate-limited, dashboard shows a fallback banner and mock events.

@@ -1,8 +1,3 @@
-import { GoogleGenAI, Type } from "@google/genai";
-
-const apiKey = process.env.GEMINI_API_KEY;
-const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
-
 export interface FinancialEvent {
   title: string;
   date: string;
@@ -12,91 +7,40 @@ export interface FinancialEvent {
 }
 
 export async function predictEventCosts(calendarEvents: string[]): Promise<FinancialEvent[]> {
-  if (!ai) throw new Error("Gemini API key not configured");
-
-  const prompt = `Analyze these calendar events and predict the financial impact for each. 
-  Return a JSON array of objects with: title, date (YYYY-MM-DD), estimated_cost (number), category, and source ('calendar').
-  
-  Events:
-  ${calendarEvents.join("\n")}
-  `;
-
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            date: { type: Type.STRING },
-            estimated_cost: { type: Type.NUMBER },
-            category: { type: Type.STRING },
-            source: { type: Type.STRING },
-          },
-          required: ["title", "date", "estimated_cost", "category", "source"],
-        },
-      },
-    },
+  const response = await fetch('/api/ai/predict-costs', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ calendarEvents }),
   });
+  if (!response.ok) throw new Error('Failed to predict costs');
 
-  return JSON.parse(response.text || "[]");
+  const data = (await response.json()) as { predictions?: FinancialEvent[] };
+  return data.predictions ?? [];
 }
 
 export async function parseFinancialDocument(base64Data: string, mimeType: string): Promise<FinancialEvent[]> {
-  if (!ai) throw new Error("Gemini API key not configured");
-
-  const prompt = `This is a financial document (receipt, bill, or lease). 
-  Extract all upcoming payment obligations, due dates, and amounts.
-  Return a JSON array of objects with: title, date (YYYY-MM-DD), estimated_cost (number), category, and source ('document').`;
-
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: {
-      parts: [
-        { inlineData: { data: base64Data, mimeType } },
-        { text: prompt }
-      ]
-    },
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            date: { type: Type.STRING },
-            estimated_cost: { type: Type.NUMBER },
-            category: { type: Type.STRING },
-            source: { type: Type.STRING },
-          },
-          required: ["title", "date", "estimated_cost", "category", "source"],
-        },
-      },
-    },
+  const response = await fetch('/api/ai/parse-document', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ base64Data, mimeType }),
   });
+  if (!response.ok) throw new Error('Failed to parse financial document');
 
-  return JSON.parse(response.text || "[]");
+  const data = (await response.json()) as { parsedEvents?: FinancialEvent[] };
+  return data.parsedEvents ?? [];
 }
 
 export async function generateBriefingText(events: FinancialEvent[]): Promise<string> {
-  if (!ai) throw new Error("Gemini API key not configured");
-
-  const prompt = `Generate a short, energetic, and helpful 30-second morning financial briefing based on these upcoming events. 
-  Mention specific goals and encourage the user. Keep it under 100 words.
-  
-  Events:
-  ${JSON.stringify(events)}
-  `;
-
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: prompt,
+  const response = await fetch('/api/ai/briefing', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ events }),
   });
+  if (!response.ok) throw new Error('Failed to generate briefing text');
 
-  return response.text || "Good morning! You're on track with your finances today.";
+  const data = (await response.json()) as { text?: string };
+  return data.text || "Good morning! You're on track with your finances today.";
 }
