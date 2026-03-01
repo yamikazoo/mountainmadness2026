@@ -1,0 +1,7 @@
+{
+  "name": "FinSync",
+  "description": "A temporal wealth agent that predicts upcoming spending by syncing your calendar and parsing financial documents with AI.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
