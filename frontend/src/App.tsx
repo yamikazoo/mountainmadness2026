@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import {
   Calendar,
   Upload,
@@ -124,6 +125,16 @@ export default function App() {
 
   const totalUpcoming = events.reduce((sum, e) => sum + e.estimated_cost, 0);
 
+  const categoryData = useMemo(() => {
+    const categories: Record<string, number> = {};
+    events.forEach(e => {
+      categories[e.category] = (categories[e.category] || 0) + e.estimated_cost;
+    });
+    return Object.entries(categories).map(([name, value]) => ({ name, value }));
+  }, [events]);
+
+  const COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6'];
+
   return (
     <div className="min-h-screen max-w-md mx-auto bg-[#F9F9F7] pb-24 relative overflow-hidden">
       {/* Header */}
@@ -146,18 +157,52 @@ export default function App() {
       <main className="px-6 space-y-6">
         {/* Quick Stats */}
         <div className="grid grid-cols-1 gap-4">
-          <Card className="bg-black text-white border-none">
+          <Card className="bg-white text-black border-black/10">
             <div className="flex justify-between items-start mb-4">
-              <div className="p-2 bg-white/10 rounded-xl">
-                <Wallet size={20} className="text-white" />
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-black/5 rounded-xl">
+                  <Wallet size={18} className="text-black" />
+                </div>
+                <h3 className="font-bold text-sm tracking-widest uppercase text-black/80">Quick Stats</h3>
               </div>
-              <span className="text-xs font-bold px-2 py-1 bg-emerald-500 rounded-lg">ON TRACK</span>
+              <span className="text-xs font-bold px-2 py-1 bg-emerald-100 text-emerald-700 rounded-lg mt-1">ON TRACK</span>
             </div>
-            <p className="text-white/60 text-xs font-medium uppercase tracking-widest">Upcoming Outflow (30d)</p>
-            <h2 className="text-4xl font-bold mt-1">${totalUpcoming.toLocaleString()}</h2>
-            <div className="mt-4 flex items-center gap-2 text-emerald-400 text-xs font-bold">
-              <ArrowUpRight size={14} />
-              <span>Predicted from 8 events</span>
+
+            <div className="relative z-10 w-full flex flex-col sm:flex-row justify-between items-start sm:items-center">
+              <div>
+                <p className="text-black/60 text-xs font-medium uppercase tracking-widest">Upcoming Outflow (30d)</p>
+                <h2 className="text-4xl font-bold mt-1">${totalUpcoming.toLocaleString()}</h2>
+                <div className="mt-4 flex items-center gap-2 text-emerald-600 text-xs font-bold">
+                  <ArrowUpRight size={14} />
+                  <span>Predicted from {events.length} events</span>
+                </div>
+              </div>
+
+              {events.length > 0 && (
+                <div className="h-32 w-32 mt-6 sm:mt-0 sm:ml-6 flex-shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={categoryData}
+                        innerRadius={36}
+                        outerRadius={48}
+                        paddingAngle={5}
+                        dataKey="value"
+                        stroke="none"
+                      >
+                        {categoryData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip
+                        contentStyle={{ backgroundColor: '#1A1A1A', border: '1px solid #333', borderRadius: '12px', color: '#fff', fontSize: '10px', padding: '4px 8px' }}
+                        itemStyle={{ color: '#fff', fontWeight: 'bold' }}
+                        formatter={(value: number) => `$${value.toLocaleString()}`}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </div>
           </Card>
         </div>
