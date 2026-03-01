@@ -86,14 +86,6 @@ All this is enveloped using an easy to use interface complete with charts and vi
 * Calvin - Feature cohesion / Frontend / UI/UX
 * Alex - Backend / API integration
 
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
-
-# Run and deploy your AI Studio app
-
-View the app in AI Studio: https://ai.studio/apps/4962968a-afe7-42c1-adfa-33a3e4ef4e71
-
 ## Run Locally
 
 **Prerequisites:**  Node.js
