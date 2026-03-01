@@ -135,9 +135,10 @@ export default function App() {
         <button
           onClick={handleBriefing}
           disabled={isBriefing}
-          className={`p-4 rounded-full shadow-lg transition-all active:scale-95 ${isBriefing ? 'bg-emerald-500 animate-pulse' : 'bg-black'}`}
+          className={`flex items-center gap-2 px-4 py-3 rounded-2xl shadow-lg transition-all active:scale-95 ${isBriefing ? 'bg-emerald-500 animate-pulse' : 'bg-black text-white hover:bg-black/90'}`}
         >
-          {isBriefing ? <Volume2 className="text-white" /> : <Play className="text-white fill-white" size={20} />}
+          {isBriefing ? <Volume2 className="text-white" size={18} /> : <Play className="text-white fill-white" size={18} />}
+          <span className="text-sm font-bold tracking-wide">{isBriefing ? "Playing..." : "Daily Report"}</span>
         </button>
       </header>
 
@@ -286,6 +287,15 @@ export default function App() {
                     </div>
                   </Card>
                 ))}
+
+                <div className="flex gap-4 pt-2">
+                  <button className="flex-1 bg-black text-white py-4 rounded-2xl text-sm font-bold active:scale-95 transition-transform flex items-center justify-center gap-2">
+                    <Plus size={18} /> Create Circle
+                  </button>
+                  <button className="flex-1 bg-white border border-black/10 py-4 rounded-2xl text-sm font-bold active:scale-95 transition-transform flex items-center justify-center gap-2">
+                    <Users size={18} /> Join Circle
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-4">
