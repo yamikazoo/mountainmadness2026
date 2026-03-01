@@ -1,123 +1,121 @@
 import express from "express";
+import cors from "cors";
 import { createServer as createViteServer } from "vite";
-import Database from "better-sqlite3";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
+import testSupabaseRouter from "../routes/testSupabase";
+import googleRouter from "../routes/google";
+import { supabaseAdmin } from "../services/supabase";
+import predictRouter from "../routes/predict";
 
-dotenv.config();
+dotenv.config({ path: ".env", override: true });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const db = new Database("finsync.db");
-
-// Initialize Database
-db.exec(`
-  CREATE TABLE IF NOT EXISTS events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT,
-    date TEXT,
-    estimated_cost REAL,
-    category TEXT,
-    source TEXT -- 'calendar' or 'document'
-  );
-
-  CREATE TABLE IF NOT EXISTS documents (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    filename TEXT,
-    upload_date TEXT,
-    content_summary TEXT,
-    total_amount REAL
-  );
-
-  CREATE TABLE IF NOT EXISTS social_circles (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT,
-    goal_amount REAL,
-    current_savings REAL
-  );
-
-  CREATE TABLE IF NOT EXISTS leaderboard (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_name TEXT,
-    savings_score REAL,
-    predicted_spending REAL
-  );
-`);
-
-// Reset leaderboard for schema change
-db.exec('DROP TABLE IF EXISTS leaderboard');
-db.exec(`
-  CREATE TABLE leaderboard (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_name TEXT,
-    savings_score REAL,
-    predicted_spending REAL
-  );
-`);
-
-// Seed data if empty
-const eventCount = db.prepare("SELECT COUNT(*) as count FROM events").get() as { count: number };
-if (eventCount.count === 0) {
-  db.prepare("INSERT INTO events (title, date, estimated_cost, category, source) VALUES (?, ?, ?, ?, ?)").run(
-    "Whistler Trip", "2026-03-15", 450.00, "Travel", "calendar"
-  );
-  db.prepare("INSERT INTO events (title, date, estimated_cost, category, source) VALUES (?, ?, ?, ?, ?)").run(
-    "Rent Payment", "2026-03-01", 1200.00, "Housing", "document"
-  );
-}
-
-const circleCount = db.prepare("SELECT COUNT(*) as count FROM social_circles").get() as { count: number };
-if (circleCount.count === 0) {
-  db.prepare("INSERT INTO social_circles (name, goal_amount, current_savings) VALUES (?, ?, ?)").run(
-    "Grad Trip Fund", 5000.00, 1250.00
-  );
-}
-
-// Ensure leaderboard has data
-const leaderCount = db.prepare("SELECT COUNT(*) as count FROM leaderboard").get() as { count: number };
-if (leaderCount.count === 0) {
-  const insert = db.prepare("INSERT INTO leaderboard (user_name, savings_score, predicted_spending) VALUES (?, ?, ?)");
-  insert.run("Alex Chen", 1250.00, 2400.00);
-  insert.run("Sarah J.", 980.00, 3100.00);
-  insert.run("You", 850.00, 2100.00);
-  insert.run("Marcus T.", 420.00, 4500.00);
-}
-
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3001;
 
-  app.use(express.json({ limit: '50mb' }));
+  app.use(cors());
+  app.use(express.json({ limit: "50mb" }));
 
-  // API Routes
-  app.get("/api/events", (req, res) => {
-    const events = db.prepare("SELECT * FROM events ORDER BY date ASC").all();
-    res.json(events);
+  // Health
+  app.get("/health", (_req, res) => {
+    res.json({ ok: true, message: "Server is running" });
   });
 
-  app.post("/api/events", (req, res) => {
-    const { title, date, estimated_cost, category, source } = req.body;
-    const info = db.prepare("INSERT INTO events (title, date, estimated_cost, category, source) VALUES (?, ?, ?, ?, ?)").run(
-      title, date, estimated_cost, category, source
-    );
-    res.json({ id: info.lastInsertRowid });
+  // API routes
+  app.use("/api", testSupabaseRouter);
+  app.use("/api", googleRouter);
+  app.use("/api", predictRouter);
+
+  // Events from Supabase
+  app.get("/api/events", async (_req, res) => {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from("events")
+        .select("*")
+        .order("start_time", { ascending: true });
+
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+
+      return res.json(data);
+    } catch (error) {
+      console.error("GET /api/events error:", error);
+      return res.status(500).json({ error: "Failed to fetch events" });
+    }
   });
 
-  app.get("/api/social", (req, res) => {
-    const circles = db.prepare("SELECT * FROM social_circles").all();
-    const leaderboard = db.prepare("SELECT * FROM leaderboard ORDER BY savings_score DESC").all();
+  app.post("/api/events", async (req, res) => {
+    try {
+      const {
+        title,
+        description,
+        location,
+        start_time,
+        end_time,
+        estimated_cost,
+        category,
+        source,
+      } = req.body;
+
+      const { data, error } = await supabaseAdmin
+        .from("events")
+        .insert([
+          {
+            title,
+            description: description || null,
+            location: location || null,
+            start_time,
+            end_time: end_time || null,
+            estimated_cost: estimated_cost ?? 0,
+            category: category || "Uncategorized",
+            source: source || "calendar",
+          },
+        ])
+        .select()
+        .single();
+
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+
+      return res.json(data);
+    } catch (error) {
+      console.error("POST /api/events error:", error);
+      return res.status(500).json({ error: "Failed to create event" });
+    }
+  });
+
+  // Social data still from local SQLite
+  // Mock social data until Supabase schema is ready
+  app.get("/api/social", (_req, res) => {
+    const circles = [{ id: 1, name: "Grad Trip Fund", goal_amount: 5000.00, current_savings: 1250.00 }];
+    const leaderboard = [
+      { id: 1, user_name: "Alex Chen", savings_score: 1250.00, predicted_spending: 2400.00 },
+      { id: 2, user_name: "Sarah J.", savings_score: 980.00, predicted_spending: 3100.00 },
+      { id: 3, user_name: "You", savings_score: 850.00, predicted_spending: 2100.00 },
+      { id: 4, user_name: "Marcus T.", savings_score: 420.00, predicted_spending: 4500.00 }
+    ];
+
     res.json({ circles, leaderboard });
   });
 
+  // ElevenLabs TTS
   app.post("/api/tts", async (req, res) => {
     const { text } = req.body;
     const apiKey = process.env.ELEVENLABS_API_KEY;
-    const voiceId = process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM";
+    const voiceId =
+      process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM";
 
     if (!apiKey) {
-      return res.status(400).json({ error: "ElevenLabs API key not configured" });
+      return res
+        .status(400)
+        .json({ error: "ElevenLabs API key not configured" });
     }
 
     try {
@@ -161,7 +159,7 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     app.use(express.static(path.join(__dirname, "..", "dist")));
-    app.get("*", (req, res) => {
+    app.get("*", (_req, res) => {
       res.sendFile(path.join(__dirname, "..", "dist", "index.html"));
     });
   }
